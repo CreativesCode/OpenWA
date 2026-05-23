@@ -7,6 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository, In, DataSource } from 'typeorm';
 import { Session, SessionStatus } from './entities/session.entity';
 import { CreateSessionDto } from './dto';
@@ -43,11 +44,19 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     private readonly eventsGateway: EventsGateway,
     private readonly webhookService: WebhookService,
     private readonly hookManager: HookManager,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
-   * On backend startup, reset all active session statuses to disconnected
-   * because the engines are not running yet after restart
+   * On backend startup:
+   *   1. Find sessions that were "active" (the engine was running) before shutdown.
+   *   2. Reset them to DISCONNECTED in the DB — the engine processes are gone.
+   *   3. If SESSION_AUTO_START is enabled (default), re-launch each of those
+   *      sessions in the background, staggered, so they reconnect on their own
+   *      without a manual Start click after every restart.
+   *
+   * Sessions that the user explicitly stopped (already DISCONNECTED), that are
+   * in FAILED state, or that were never started (CREATED) are left alone.
    */
   async onModuleInit(): Promise<void> {
     const activeStatuses = [
@@ -57,17 +66,53 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
       SessionStatus.AUTHENTICATING,
     ];
 
-    const result = await this.sessionRepository.update(
+    const previouslyActive = await this.sessionRepository.find({
+      where: { status: In(activeStatuses) },
+      select: ['id', 'name'],
+    });
+
+    if (previouslyActive.length === 0) {
+      return;
+    }
+
+    await this.sessionRepository.update(
       { status: In(activeStatuses) },
       { status: SessionStatus.DISCONNECTED },
     );
 
-    if (result.affected && result.affected > 0) {
-      this.logger.log(`Reset ${result.affected} session(s) to disconnected on startup`, {
-        action: 'startup_reset',
-        affected: result.affected,
+    this.logger.log(
+      `Reset ${previouslyActive.length} session(s) to disconnected on startup`,
+      { action: 'startup_reset', affected: previouslyActive.length },
+    );
+
+    const autoStart = this.configService.get<boolean>('session.autoStart') ?? true;
+    if (!autoStart) {
+      this.logger.log('Auto-start disabled (SESSION_AUTO_START=false) — sessions must be started manually', {
+        action: 'startup_autostart_skipped',
       });
+      return;
     }
+
+    const staggerMs = this.configService.get<number>('session.autoStartStaggerMs') ?? 1500;
+
+    this.logger.log(
+      `Auto-starting ${previouslyActive.length} previously active session(s) (stagger ${staggerMs}ms)`,
+      { action: 'startup_autostart', count: previouslyActive.length, staggerMs },
+    );
+
+    // Fire-and-forget: stagger starts so multiple Chromium instances don't boot at once.
+    // Errors are swallowed per-session — one failing session must not block the others.
+    previouslyActive.forEach((session, index) => {
+      setTimeout(() => {
+        void this.start(session.id).catch(err => {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.logger.error(`Auto-start failed for session ${session.name}`, msg, {
+            sessionId: session.id,
+            action: 'startup_autostart_error',
+          });
+        });
+      }, index * staggerMs);
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

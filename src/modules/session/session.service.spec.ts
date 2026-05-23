@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository, DataSource } from 'typeorm';
 import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { SessionService } from './session.service';
@@ -98,6 +99,10 @@ describe('SessionService', () => {
         { provide: EventsGateway, useValue: eventsGateway },
         { provide: WebhookService, useValue: webhookService },
         { provide: HookManager, useValue: hookManager },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -367,14 +372,30 @@ describe('SessionService', () => {
   // ── onModuleInit ──────────────────────────────────────────────────
 
   describe('onModuleInit', () => {
-    it('should reset active sessions to DISCONNECTED on startup', async () => {
-      (repository.update as jest.Mock).mockResolvedValue({ affected: 3 });
+    it('should reset previously-active sessions to DISCONNECTED on startup', async () => {
+      (repository.find as jest.Mock).mockResolvedValue([
+        createMockSession({ id: 'a', status: SessionStatus.READY }),
+        createMockSession({ id: 'b', name: 'b', status: SessionStatus.QR_READY }),
+      ]);
+      (repository.update as jest.Mock).mockResolvedValue({ affected: 2 });
+      // Force auto-start off so the test does not schedule background work.
+      const cfg = service['configService'] as unknown as { get: jest.Mock };
+      cfg.get.mockImplementation((key: string) => (key === 'session.autoStart' ? false : undefined));
 
       await service.onModuleInit();
 
+      expect(repository.find).toHaveBeenCalled();
       expect(repository.update).toHaveBeenCalledWith(expect.objectContaining({ status: expect.anything() as string }), {
         status: SessionStatus.DISCONNECTED,
       });
+    });
+
+    it('should be a no-op when there are no previously-active sessions', async () => {
+      (repository.find as jest.Mock).mockResolvedValue([]);
+
+      await service.onModuleInit();
+
+      expect(repository.update).not.toHaveBeenCalled();
     });
   });
 

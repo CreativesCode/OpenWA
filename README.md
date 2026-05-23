@@ -158,6 +158,55 @@ docker compose --profile full up -d
 > - Development (`docker-compose.dev.yml`): SQLite, local storage, both API & Dashboard included
 > - Production (`docker-compose.yml`): Configurable database, profiles for optional services
 
+## ♻️ Session Auto-Start on Boot
+
+When the OpenWA server restarts (deploy, container restart, crash recovery), any session whose engine was running before shutdown is **automatically re-launched** in the background. You don't need to click **Start** on each session after every restart.
+
+### How it works
+
+On boot, `SessionService.onModuleInit` does the following:
+
+1. Finds sessions whose DB status was one of `READY`, `INITIALIZING`, `QR_READY`, or `AUTHENTICATING` — those had a live engine before shutdown.
+2. Resets their status to `DISCONNECTED` (the Chromium processes are gone).
+3. If auto-start is enabled (default), schedules `start()` for each of them with a small stagger so multiple Chromium instances don't boot at once.
+
+Sessions in the following states are **left alone** — auto-start never touches them:
+
+| State | Why it is skipped |
+|---|---|
+| `DISCONNECTED` (already) | The user explicitly stopped it — re-launching would be unexpected |
+| `FAILED` | Needs human attention (auth_failure, ban, etc.) |
+| `CREATED` | Never started, no auth data yet |
+
+### Configuration
+
+| Env var | Default | Description |
+|---|---|---|
+| `SESSION_AUTO_START` | `true` | Set to `false` to disable auto-start and require manual `/start` after each restart |
+| `SESSION_AUTO_START_STAGGER_MS` | `1500` | Delay in ms between consecutive session starts on boot. Raise it if your host has limited RAM/CPU and Chromium spikes hurt you |
+
+Example (`.env`):
+
+```bash
+SESSION_AUTO_START=true
+SESSION_AUTO_START_STAGGER_MS=3000
+```
+
+### Observability
+
+On boot, look for these log lines to confirm what happened:
+
+```
+Reset N session(s) to disconnected on startup
+Auto-starting N previously active session(s) (stagger 1500ms)
+Auto-start failed for session <name>   ← per-session, non-fatal
+Auto-start disabled (SESSION_AUTO_START=false) — sessions must be started manually
+```
+
+> **Note**: each auto-started session goes through the normal start flow, including the existing reconnect logic (`maxReconnectAttempts` / `reconnectBaseDelay` in `session.config`). If WhatsApp is unreachable at boot, the session will retry on its own with exponential backoff.
+
+---
+
 ## 🔌 Ports
 
 | Service   | Port            | Description              |
