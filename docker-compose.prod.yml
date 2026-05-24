@@ -1,0 +1,24 @@
+# OpenWA - Production Override
+# Use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full up -d
+#
+# This override:
+# - Exposes Traefik publicly on ports 80 and 443
+# - Enables HTTPS via Let's Encrypt (ACME)
+# - Forces HTTP -> HTTPS redirect
+# - Persists certificates in a named volume
+
+services:
+  traefik:
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./traefik/traefik.prod.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic.prod.yml:/etc/traefik/dynamic.yml:ro
+      - letsencrypt:/letsencrypt
+    environment:
+      - TRAEFIK_ACME_EMAIL=${TRAEFIK_ACME_EMAIL:-admin@example.com}
+
+volumes:
+  letsencrypt:
+    driver: local

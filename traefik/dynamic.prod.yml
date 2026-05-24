@@ -1,0 +1,46 @@
+# Traefik Production Dynamic Configuration
+# - All routers on websecure (HTTPS) entrypoint
+# - TLS certificate via Let's Encrypt (ACME)
+
+http:
+  routers:
+    # API Router - highest priority for /api paths
+    api:
+      rule: 'PathPrefix(`/api/`)'
+      entryPoints:
+        - websecure
+      service: api
+      priority: 100
+      tls:
+        certResolver: letsencrypt
+
+    # WebSocket Router - highest priority for socket.io
+    websocket:
+      rule: 'PathPrefix(`/socket.io`)'
+      entryPoints:
+        - websecure
+      service: api
+      priority: 100
+      tls:
+        certResolver: letsencrypt
+
+    # Dashboard Router - catch-all for frontend (lowest priority)
+    dashboard:
+      rule: 'PathPrefix(`/`)'
+      entryPoints:
+        - websecure
+      service: dashboard
+      priority: 1
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    api:
+      loadBalancer:
+        servers:
+          - url: 'http://openwa-api:2785'
+
+    dashboard:
+      loadBalancer:
+        servers:
+          - url: 'http://openwa-dashboard:80'
