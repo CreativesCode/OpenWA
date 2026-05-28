@@ -103,9 +103,11 @@ Click **"Edit"** en la sección "Image and shape".
 
 **Image:**
 - Click **"Change image"**
-- Selecciona **"Canonical Ubuntu"**
-- Versión: **22.04** (la más estable para Docker en ARM)
-- Imagen: la que diga **"aarch64"** al final (es la versión ARM)
+- Selecciona **"Canonical Ubuntu 22.04 Minimal aarch64"** (es la versión ARM — la única 22.04 ARM disponible).
+  - ⚠️ Verás un warning amarillo "This image has no compatible image builds for the current shape". Es **normal**: te avisa de que al elegir la imagen ARM, Oracle cambiará automáticamente el shape al ARM compatible (Ampere A1), que es lo que queremos.
+  - ⚠️ NO elijas "Canonical Ubuntu 22.04" (sin "Minimal aarch64") — esa solo existe en x86, no sirve para el shape Ampere ARM del free tier.
+  - "Minimal" es una variante ligera pensada para cloud/contenedores, funciona perfecto para Docker. Los paquetes que falten los instala `apt` en el paso 7.
+- Si te pide elegir **Image build**, deja la más reciente (la primera del dropdown).
 - Click **"Select image"**
 
 **Shape:**
@@ -117,19 +119,31 @@ Click **"Edit"** en la sección "Image and shape".
   - **Memory**: `24` GB (el máximo del free tier)
 - Click **"Select shape"**
 
-> 💡 Si te dice "Out of capacity for this shape" → es porque Oracle no tiene ARM disponible en ese momento en tu región. Tienes 3 opciones:
-> 1. **Reintentar** en unas horas (suele liberarse)
-> 2. **Cambiar a otra Availability Domain** (AD-1, AD-2, AD-3 — botón arriba de la página)
-> 3. **Usar el shape AMD** `VM.Standard.E2.1.Micro` (1 OCPU + 1 GB RAM, también free) — pero será MUY justo para Chromium. **No recomendado** para OpenWA.
+> 💡 **Out of capacity** — el error más común del free tier. La capacidad ARM Ampere está saturada en casi todas las regiones. En orden de probabilidad de éxito:
+> 1. **Cambiar Availability Domain** (solo si tu región tiene varias — Frankfurt/Ashburn/Phoenix tienen 3, Madrid/São Paulo solo 1). En el selector arriba del formulario cambia AD-1 → AD-2 → AD-3.
+> 2. **Bajar la config**: prueba `2` OCPU + `12` GB. A veces hay capacidad pequeña pero no grande. Después de creada, puedes subirla a 4+24 desde Edit shape.
+> 3. **Reintentar manualmente** cada 30-60 min. La capacidad se libera esporádicamente.
+> 4. **Script de auto-retry**: si llevas horas sin éxito, usa [hitrov/oci-arm-host-capacity](https://github.com/hitrov/oci-arm-host-capacity) — reintenta vía API hasta que pille capacidad (típico: 1 h - 3 días).
+>
+> ❌ NO recomendado: caer a `VM.Standard.E2.1.Micro` (AMD, 1 OCPU + 1 GB). Es demasiado justo para Chromium/WhatsApp.
 
-### 3.4 Networking
+### 3.4 Security
+
+Oracle muestra una sección "Security" con un toggle de **Shielded instance** y "Advanced options".
+
+- **Shielded instance**: déjalo **OFF** (default). Añade Secure Boot + TPM, útil solo en entornos muy regulados, sin beneficio para Docker/OpenWA.
+- **Advanced options**: no lo abras.
+
+Baja y continúa.
+
+### 3.5 Networking
 
 Déjalo en automático:
 - **Virtual cloud network**: "Create new virtual cloud network"
 - **Subnet**: "Create new public subnet"
 - ✅ **Assign a public IPv4 address**: marcado
 
-### 3.5 SSH keys
+### 3.6 SSH keys
 
 **Tienes 2 opciones**:
 
@@ -146,19 +160,19 @@ Si ya tienes una en tu Windows (`C:\Users\TU_USER\.ssh\id_rsa.pub`):
 1. Selecciona **"Upload public key files (.pub)"** o **"Paste public keys"**
 2. Sube o pega el contenido
 
-### 3.6 Boot volume
+### 3.7 Boot volume
 
 - Deja **"Specify a custom boot volume size"** marcado
 - **Boot volume size**: `50` GB (free tier permite hasta 200 GB total entre todas tus instancias)
 - VPU: **10** (default, suficiente)
 
-### 3.7 Crear
+### 3.8 Crear
 
 Click azul **"Create"** abajo.
 
 Espera 30-60 segundos. La instancia pasa de **"Provisioning"** (amarillo) → **"Running"** (verde).
 
-### 3.8 Anotar datos importantes
+### 3.9 Anotar datos importantes
 
 Cuando esté en **Running**, en la página de la instancia anota:
 
