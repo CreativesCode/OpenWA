@@ -1,0 +1,43 @@
+# Traefik DuckDNS Dynamic Configuration
+# - Routers matched by Host() so Traefik proactively requests the cert at startup
+# - All on websecure (HTTPS) with the Let's Encrypt resolver
+
+http:
+  routers:
+    api:
+      rule: 'Host(`alucard-openws.duckdns.org`) && PathPrefix(`/api/`)'
+      entryPoints:
+        - websecure
+      service: api
+      priority: 100
+      tls:
+        certResolver: letsencrypt
+
+    websocket:
+      rule: 'Host(`alucard-openws.duckdns.org`) && PathPrefix(`/socket.io`)'
+      entryPoints:
+        - websecure
+      service: api
+      priority: 100
+      tls:
+        certResolver: letsencrypt
+
+    dashboard:
+      rule: 'Host(`alucard-openws.duckdns.org`)'
+      entryPoints:
+        - websecure
+      service: dashboard
+      priority: 1
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    api:
+      loadBalancer:
+        servers:
+          - url: 'http://openwa-api:2785'
+
+    dashboard:
+      loadBalancer:
+        servers:
+          - url: 'http://openwa-dashboard:80'

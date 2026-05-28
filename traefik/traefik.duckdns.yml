@@ -1,0 +1,39 @@
+# Traefik DuckDNS + Let's Encrypt Configuration
+# - HTTP on :80 redirects to HTTPS (and serves the ACME HTTP-01 challenge)
+# - HTTPS on :443 with automatic Let's Encrypt certificate
+# - Email is hardcoded on purpose: Traefik does NOT expand ${ENV} in the static file
+
+api:
+  dashboard: false
+  insecure: false
+
+entryPoints:
+  web:
+    address: ':80'
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ':443'
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: robert.cabrer92@gmail.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+log:
+  level: INFO
+
+accessLog: {}

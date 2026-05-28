@@ -1,0 +1,22 @@
+# OpenWA - DuckDNS + Let's Encrypt Override (valid trusted cert, no domain purchase)
+# Use with:
+#   docker compose -f docker-compose.yml -f docker-compose.duckdns.yml --profile full up -d
+#
+# This override:
+# - Exposes Traefik publicly on ports 80 and 443
+# - Issues a real Let's Encrypt certificate for alucard-openws.duckdns.org
+# - Persists certificates in the 'letsencrypt' named volume
+
+services:
+  traefik:
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./traefik/traefik.duckdns.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic.duckdns.yml:/etc/traefik/dynamic.yml:ro
+      - letsencrypt:/letsencrypt
+
+volumes:
+  letsencrypt:
+    driver: local
