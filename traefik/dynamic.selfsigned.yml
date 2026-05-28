@@ -1,0 +1,44 @@
+# Traefik Self-Signed Dynamic Configuration
+# - All routers on websecure (HTTPS) entrypoint
+# - tls: {} with no certResolver => Traefik serves its built-in self-signed cert
+# - Rules match by PathPrefix only (no Host) so access by raw IP works
+
+http:
+  routers:
+    # API Router - highest priority for /api paths
+    api:
+      rule: 'PathPrefix(`/api/`)'
+      entryPoints:
+        - websecure
+      service: api
+      priority: 100
+      tls: {}
+
+    # WebSocket Router - highest priority for socket.io
+    websocket:
+      rule: 'PathPrefix(`/socket.io`)'
+      entryPoints:
+        - websecure
+      service: api
+      priority: 100
+      tls: {}
+
+    # Dashboard Router - catch-all for frontend (lowest priority)
+    dashboard:
+      rule: 'PathPrefix(`/`)'
+      entryPoints:
+        - websecure
+      service: dashboard
+      priority: 1
+      tls: {}
+
+  services:
+    api:
+      loadBalancer:
+        servers:
+          - url: 'http://openwa-api:2785'
+
+    dashboard:
+      loadBalancer:
+        servers:
+          - url: 'http://openwa-dashboard:80'

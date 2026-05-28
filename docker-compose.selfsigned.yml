@@ -1,0 +1,17 @@
+# OpenWA - Self-Signed HTTPS Override (IP access, no domain)
+# Use with:
+#   docker compose -f docker-compose.yml -f docker-compose.selfsigned.yml --profile full up -d --build
+#
+# This override:
+# - Exposes Traefik publicly on ports 80 and 443
+# - Serves a self-signed certificate (browser warns once; traffic IS encrypted)
+# - Requires NO domain and NO Let's Encrypt
+
+services:
+  traefik:
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./traefik/traefik.selfsigned.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic.selfsigned.yml:/etc/traefik/dynamic.yml:ro

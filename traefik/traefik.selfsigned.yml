@@ -1,0 +1,31 @@
+# Traefik Self-Signed Configuration (IP access, no domain)
+# - HTTP on :80 redirects to HTTPS
+# - HTTPS on :443 serves Traefik's built-in self-signed certificate
+# - No ACME / Let's Encrypt (works without a domain)
+
+api:
+  dashboard: false
+  insecure: false
+
+entryPoints:
+  web:
+    address: ':80'
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ':443'
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+log:
+  level: INFO
+
+accessLog: {}
